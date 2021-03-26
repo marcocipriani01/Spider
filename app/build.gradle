@@ -1,15 +1,14 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 29
-    buildToolsVersion "29.0.0"
+    compileSdkVersion 30
+    buildToolsVersion "30.0.3"
     defaultConfig {
-        applicationId "org.kknickkk.spider"
-        minSdkVersion 19
-        targetSdkVersion 29
-        versionCode 13
-        versionName "0.2.2"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        applicationId "io.github.marcocipriani01.spider"
+        minSdkVersion 21
+        targetSdkVersion 30
+        versionCode 1
+        versionName "1.0.0"
     }
     buildTypes {
         release {
@@ -21,17 +20,12 @@ android {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.appcompat:appcompat:1.0.2'
-    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
-    implementation 'com.google.android.material:material:1.0.0'
-    implementation 'androidx.annotation:annotation:1.1.0'
-    implementation 'androidx.lifecycle:lifecycle-extensions:2.0.0'
-    testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'androidx.test:runner:1.2.0'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
-    implementation 'androidx.recyclerview:recyclerview:1.0.0'
-
-    // https://mvnrepository.com/artifact/com.jcraft/jsch
+    implementation 'androidx.appcompat:appcompat:1.2.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
+    implementation 'com.google.android.material:material:1.3.0'
+    implementation 'androidx.annotation:annotation:1.2.0'
+    implementation 'androidx.lifecycle:lifecycle-extensions:2.2.0'
+    implementation 'androidx.recyclerview:recyclerview:1.1.0'
     implementation group: 'com.jcraft', name: 'jsch', version: '0.1.55'
-
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
 }

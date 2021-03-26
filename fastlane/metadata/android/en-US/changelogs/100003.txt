@@ -1,3 +1,0 @@
-Version 0.2.0 is here!
-
-Fixed square icon not showing

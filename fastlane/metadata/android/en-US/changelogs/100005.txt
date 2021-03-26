@@ -1,3 +1,0 @@
-Release 0.2.2
-
-Now also handling password protected files
