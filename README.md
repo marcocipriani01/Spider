@@ -1,5 +1,5 @@
 # Spider
-![](app/src/main/res/drawable/logo.png)
+![](app/src/main/res/mipmap-xxhdpi/app_icon.png)
 
 This is a simple SFTP client for Android which uses the [Java Secure Channel](http://www.jcraft.com/jsch/) library to open the secure connection.
 
