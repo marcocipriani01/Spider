@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/connection_root_view"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -14,63 +16,105 @@
         android:textAppearance="@style/TextAppearance.AppCompat.Large"
         android:textColor="?attr/editTextColor" />
 
-    <EditText
-        android:id="@+id/register_ip"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:hint="@string/ip_address"
-        android:importantForAutofill="no"
-        android:inputType="text" />
+        android:orientation="horizontal">
 
-    <EditText
-        android:id="@+id/register_port"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:hint="@string/port_hint"
-        android:importantForAutofill="no"
-        android:inputType="numberDecimal" />
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:layout_weight="1"
+            android:hint="@string/ip_address">
 
-    <EditText
-        android:id="@+id/register_user"
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/sftp_ip_field"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:importantForAutofill="no"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="2dp"
+            android:text=":"
+            android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+            android:textStyle="bold"
+            tools:ignore="HardcodedText" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:layout_weight="2"
+            android:hint="@string/port_hint">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/sftp_port_field"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:importantForAutofill="no"
+                android:inputType="number"
+                android:text="22"
+                tools:ignore="HardcodedText" />
+        </com.google.android.material.textfield.TextInputLayout>
+    </LinearLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:hint="@string/username"
-        android:importantForAutofill="no"
-        android:inputType="textPersonName" />
+        android:hint="@string/username">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/sftp_username_field"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:importantForAutofill="no"
+            android:inputType="textPersonName" />
+    </com.google.android.material.textfield.TextInputLayout>
 
     <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/register_switch_id"
+        android:id="@+id/sftp_pem_switch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="8dp"
         android:text="@string/use_pem_key_file"
         android:textAlignment="viewStart"
         android:textAppearance="@style/TextAppearance.AppCompat.Medium"
         app:switchMinWidth="60dp" />
 
-    <EditText
-        android:id="@+id/register_password"
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/password_field_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:hint="@string/password"
-        android:importantForAutofill="no"
-        android:inputType="textPassword" />
+        app:endIconMode="password_toggle">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/sftp_password_field"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:importantForAutofill="no"
+            android:inputType="textPassword" />
+    </com.google.android.material.textfield.TextInputLayout>
 
     <Button
-        android:id="@+id/register_button_choose_file"
+        android:id="@+id/sftp_choose_pem_btn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:onClick="performFileSearchPrivate"
+        android:layout_marginTop="8dp"
+        android:drawableLeft="@drawable/folder"
+        android:onClick="chosePEMKeyAction"
         android:text="@string/choose_pem_private_key"
         android:visibility="gone" />
 
     <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/register_switch_pem_password"
+        android:id="@+id/sftp_pem_has_password_switch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
@@ -79,23 +123,30 @@
         android:visibility="gone"
         app:switchMinWidth="60dp" />
 
-    <EditText
-        android:id="@+id/register_pem_password"
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/pem_password_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:hint="@string/pem_password"
-        android:importantForAutofill="no"
-        android:inputType="textPassword"
-        android:visibility="gone" />
+        android:visibility="gone">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/sftp_pem_password_field"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:importantForAutofill="no"
+            android:inputType="textPassword" />
+    </com.google.android.material.textfield.TextInputLayout>
 
     <Button
-        android:id="@+id/register_button_save"
+        android:id="@+id/sftp_connect_btn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
         android:drawableStart="@drawable/connect"
-        android:onClick="saveConnection"
+        android:minHeight="55dp"
+        android:onClick="connectAction"
         android:text="@string/connect"
         android:textStyle="bold" />
 </LinearLayout>

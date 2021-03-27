@@ -1,9 +1,11 @@
 package io.github.marcocipriani01.spider;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -14,9 +16,12 @@ import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -24,7 +29,6 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 import com.jcraft.jsch.ChannelSftp;
-import com.jcraft.jsch.Session;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -33,20 +37,24 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Objects;
 import java.util.Vector;
 
 public class FolderActivity extends AppCompatActivity {
 
-    private static final int READ_REQUEST_CODE_UPLOAD = 84;
-    private final PathHandler pathHandler = new PathHandler();
+    public static final String EXTRA_REMOTE_FOLDER = "REMOTE_FOLDER";
+    private static final int STORAGE_PERMISSION_REQUEST = 20;
+    private static final int READ_REQUEST_CODE_UPLOAD = 30;
     private final ArrayList<DirectoryElement> elements = new ArrayList<>();
     private ActionBar actionBar;
     private FolderAdapter adapter;
     private CoordinatorLayout coordinator;
+    private String currentPath;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        currentPath = Objects.requireNonNull(getIntent().getStringExtra(EXTRA_REMOTE_FOLDER));
         setContentView(R.layout.activity_folder);
         coordinator = findViewById(R.id.folder_activity_coordinator);
         actionBar = getSupportActionBar();
@@ -64,7 +72,7 @@ public class FolderActivity extends AppCompatActivity {
 
         SwipeRefreshLayout swipeRefreshLayout = findViewById(R.id.swipe_view);
         swipeRefreshLayout.setOnRefreshListener(() -> {
-            new GetFilesTask(pathHandler.getCurrentPath()).start();
+            new GetFilesTask(currentPath).start();
             swipeRefreshLayout.setRefreshing(false);
         });
         RecyclerView recyclerView = findViewById(R.id.folder_list);
@@ -77,20 +85,26 @@ public class FolderActivity extends AppCompatActivity {
                     public void onItemClick(View view, int position) {
                         DirectoryElement element = elements.get(position);
                         if (element.isDirectory || element.sftpInfo.getAttrs().isLink()) {
-                            pathHandler.updatePath(element.name);
-                            new GetFilesTask(pathHandler.getCurrentPath()).start();
+                            updatePath(element.name);
+                            new GetFilesTask(currentPath).start();
                         }
                     }
 
                     @Override
                     public void onLongItemClick(View view, int position) {
-                        DirectoryElement element = elements.get(position);
-                        if (!element.isDirectory && !element.sftpInfo.getAttrs().isLink())
-                            new DownloadTask(element).start();
+                        if (ContextCompat.checkSelfPermission(FolderActivity.this,
+                                Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                            DirectoryElement element = elements.get(position);
+                            if (!element.isDirectory && !element.sftpInfo.getAttrs().isLink())
+                                new DownloadTask(element).start();
+                        } else {
+                            ActivityCompat.requestPermissions(FolderActivity.this,
+                                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST);
+                        }
                     }
                 })
         );
-        new GetFilesTask(pathHandler.getCurrentPath()).start();
+        new GetFilesTask(currentPath).start();
     }
 
     @Override
@@ -104,8 +118,8 @@ public class FolderActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        pathHandler.updatePath("..");
-        new GetFilesTask(pathHandler.getCurrentPath()).start();
+        updatePath("..");
+        new GetFilesTask(currentPath).start();
     }
 
     @Override
@@ -118,9 +132,43 @@ public class FolderActivity extends AppCompatActivity {
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
         super.onActivityResult(requestCode, resultCode, resultData);
-        if (requestCode == READ_REQUEST_CODE_UPLOAD && resultCode == Activity.RESULT_OK) {
-            if (resultData != null)
-                new UploadTask(resultData.getData(), SpiderApp.currentPath).start();
+        if ((requestCode == READ_REQUEST_CODE_UPLOAD) && (resultCode == Activity.RESULT_OK) && (resultData != null))
+            new UploadTask(resultData.getData(), currentPath).start();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if ((requestCode == STORAGE_PERMISSION_REQUEST) && (grantResults[0] != PackageManager.PERMISSION_GRANTED))
+            Snackbar.make(coordinator, R.string.storage_permission_required, Snackbar.LENGTH_SHORT).show();
+    }
+
+    public void updatePath(String dir) {
+        // Clean current path from last / but not root
+        if (currentPath.endsWith("/") && currentPath.length() != 1)
+            currentPath = currentPath.substring(0, currentPath.length() - 2);
+        // Clean dir from first /
+        if (dir.endsWith("/")) {
+            dir = dir.substring(0, dir.length() - 2);
+        }
+        // Clean dir from first /
+        if (dir.substring(0, 0).equals("/")) {
+            dir = dir.substring(1);
+        }
+        // Check if going up
+        if (dir.equals("..")) {
+            // Check if going on root
+            if (currentPath.lastIndexOf("/") == 0) {
+                currentPath = "/";
+            } else {
+                currentPath = currentPath.substring(0, currentPath.lastIndexOf("/"));
+            }
+        } else {
+            if (currentPath.length() != 1) {
+                currentPath = currentPath + "/" + dir;
+            } else {
+                currentPath = currentPath + dir;
+            }
         }
     }
 
@@ -138,10 +186,8 @@ public class FolderActivity extends AppCompatActivity {
         @SuppressWarnings("unchecked")
         @Override
         public void run() {
-            Log.d(TAG, "Started do on background");
             try {
-                Session session = SpiderApp.session;
-                Log.d(TAG, "session is: " + session.getHost());
+                Log.d(TAG, "session is: " + SpiderApp.session.getHost());
                 SpiderApp.channel.cd(path);
                 final Vector<ChannelSftp.LsEntry> list = SpiderApp.channel.ls("*");
                 Log.d(TAG, "Files are:");
@@ -160,7 +206,7 @@ public class FolderActivity extends AppCompatActivity {
                         Collections.sort(elements);
                     }
                     adapter.notifyDataSetChanged();
-                    actionBar.setTitle(SpiderApp.currentPath);
+                    actionBar.setTitle(currentPath);
                 });
             } catch (Exception e) {
                 Log.e(TAG, e.getMessage(), e);

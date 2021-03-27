@@ -2,175 +2,237 @@ package io.github.marcocipriani01.spider;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.google.android.material.snackbar.Snackbar;
+import com.google.android.material.textfield.TextInputEditText;
+import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
-
-import io.github.marcocipriani01.spider.tasks.ConnectTask;
 
 public class ConnectionActivity extends AppCompatActivity {
 
-    private static final int READ_REQUEST_CODE_PRIVATE_KEY = 42;
-    private SwitchCompat useId, pemPasswordSwitch;
-    private EditText passwordField, pemPasswordField;
+    private static final int PEM_CHOOSER_REQUEST = 10;
+    private static final int STORAGE_PERMISSION_REQUEST = 20;
+    public static byte[] private_bytes;
+    private SwitchCompat usePEMKeySwitch, pemPasswordSwitch;
+    private TextInputEditText passwordField, pemPasswordField, usernameField, ipField, portField;
+    private SharedPreferences preferences;
     private Button privateKeyButton;
+    private View rootView;
+    private String remoteFolder;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.connection_activity);
-        useId = findViewById(R.id.register_switch_id);
-        passwordField = findViewById(R.id.register_password);
-        privateKeyButton = findViewById(R.id.register_button_choose_file);
-        privateKeyButton.setVisibility(View.GONE);
-        pemPasswordSwitch = findViewById(R.id.register_switch_pem_password);
-        pemPasswordSwitch.setVisibility(View.GONE);
-        pemPasswordField = findViewById(R.id.register_pem_password);
-        pemPasswordField.setVisibility(View.GONE);
-        useId.setOnCheckedChangeListener((buttonView, isChecked) -> {
+        rootView = findViewById(R.id.connection_root_view);
+        usePEMKeySwitch = findViewById(R.id.sftp_pem_switch);
+        passwordField = findViewById(R.id.sftp_password_field);
+        usernameField = this.findViewById(R.id.sftp_username_field);
+        ipField = this.findViewById(R.id.sftp_ip_field);
+        portField = this.findViewById(R.id.sftp_port_field);
+        View passwordFieldLayout = findViewById(R.id.password_field_layout),
+                pemPasswordLayout = findViewById(R.id.pem_password_layout);
+        privateKeyButton = findViewById(R.id.sftp_choose_pem_btn);
+        pemPasswordSwitch = findViewById(R.id.sftp_pem_has_password_switch);
+        pemPasswordField = findViewById(R.id.sftp_pem_password_field);
+        usePEMKeySwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
-                passwordField.setVisibility(View.GONE);
+                passwordFieldLayout.setVisibility(View.GONE);
                 privateKeyButton.setVisibility(View.VISIBLE);
                 pemPasswordSwitch.setVisibility(View.VISIBLE);
+                pemPasswordLayout.setVisibility(pemPasswordSwitch.isChecked() ? View.VISIBLE : View.GONE);
             } else {
-                passwordField.setVisibility(View.VISIBLE);
+                passwordFieldLayout.setVisibility(View.VISIBLE);
                 privateKeyButton.setVisibility(View.GONE);
                 pemPasswordSwitch.setVisibility(View.GONE);
-                pemPasswordField.setVisibility(View.GONE);
+                pemPasswordLayout.setVisibility(View.GONE);
             }
         });
-        pemPasswordSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked) {
-                pemPasswordField.setVisibility(View.VISIBLE);
-            } else {
-                pemPasswordField.setVisibility(View.INVISIBLE);
+        pemPasswordSwitch.setOnCheckedChangeListener((buttonView, isChecked) ->
+                pemPasswordLayout.setVisibility(isChecked ? View.VISIBLE : View.GONE));
 
-            }
-        });
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
-                PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 84);
-        }
+        preferences = getPreferences(Context.MODE_PRIVATE);
+        ipField.setText(preferences.getString(SpiderApp.IP_PREF, ""));
+        usernameField.setText(preferences.getString(SpiderApp.USERNAME_PREF, ""));
+        passwordField.setText(preferences.getString(SpiderApp.PASSWORD_PREF, ""));
+        portField.setText(preferences.getString(SpiderApp.PORT_PREF, "22"));
+        pemPasswordField.setText(preferences.getString(SpiderApp.PEM_PASSWORD_PREF, ""));
+        usePEMKeySwitch.setChecked(preferences.getBoolean(SpiderApp.USE_PEM_PREF, false));
+        pemPasswordSwitch.setChecked(preferences.getBoolean(SpiderApp.USE_PEM_PASSWORD_PREF, false));
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST);
     }
 
-    /**
-     * Called when the user taps the Send button
-     */
-    public void saveConnection(View view) {
-        String user = this.<EditText>findViewById(R.id.register_user).getText().toString(),
-                ip = this.<EditText>findViewById(R.id.register_ip).getText().toString(),
-                port = this.<EditText>findViewById(R.id.register_port).getText().toString(),
-                password = passwordField.getText().toString(),
-                pemPassword = pemPasswordField.getText().toString();
-
-        SpiderApp.currentPath = "/home/" + user;
+    public void connectAction(View view) {
+        String user = usernameField.getText().toString(),
+                ip = ipField.getText().toString();
+        remoteFolder = "/home/" + user;
         if (!user.isEmpty() && !ip.isEmpty()) {
-            if (useId.isChecked()) {
-                if (SpiderApp.private_bytes == null) {
-                    Snackbar.make(view, "Check PEM key file", Snackbar.LENGTH_SHORT).show();
-                    return;
-                }
+            String portString = portField.getText().toString(),
+                    password = passwordField.getText().toString(),
+                    pemPassword = pemPasswordField.getText().toString();
+            boolean usePEM = usePEMKeySwitch.isChecked(),
+                    usePEMPassword = pemPasswordSwitch.isChecked();
+            if (usePEM && (private_bytes == null)) {
+                Snackbar.make(rootView, R.string.no_pem_loaded, Snackbar.LENGTH_SHORT).show();
             } else if (password.isEmpty()) {
-                Snackbar.make(view, "Please input a password", Snackbar.LENGTH_SHORT).show();
-                return;
+                Snackbar.make(rootView, R.string.please_write_password, Snackbar.LENGTH_SHORT).show();
+            } else {
+                try {
+                    int port = portString.isEmpty() ? 22 : Integer.parseInt(portString);
+                    preferences.edit().putString(SpiderApp.USERNAME_PREF, user)
+                            .putString(SpiderApp.IP_PREF, ip)
+                            .putString(SpiderApp.PORT_PREF, portString)
+                            .putString(SpiderApp.PASSWORD_PREF, password)
+                            .putString(SpiderApp.PEM_PASSWORD_PREF, pemPassword)
+                            .putBoolean(SpiderApp.USE_PEM_PREF, usePEM)
+                            .putBoolean(SpiderApp.USE_PEM_PASSWORD_PREF, usePEMPassword).apply();
+                    if ((port <= 0) || (port >= 0xFFFF)) {
+                        Snackbar.make(rootView, R.string.invalid_port, Snackbar.LENGTH_SHORT).show();
+                    } else {
+                        new ConnectTask(user, ip, password, port, usePEM,
+                                usePEMPassword, pemPassword).start();
+                    }
+                } catch (NumberFormatException e) {
+                    Snackbar.make(rootView, R.string.invalid_port, Snackbar.LENGTH_SHORT).show();
+                }
             }
-            new ConnectTask(ConnectionActivity.this, user, ip, password,
-                    port.isEmpty() ? 22 : Integer.parseInt(port), useId.isChecked(),
-                    pemPasswordSwitch.isChecked(), pemPassword) {
-                @Override
-                protected void onResult(Session session) {
-                    Intent FolderIntent = new Intent(ConnectionActivity.this, FolderActivity.class);
-                    Log.d("REGISTER ACTIVITY", "launching Folder activity");
-                    ConnectionActivity.this.startActivity(FolderIntent);
-                }
-
-                @Override
-                protected void onError(Exception e) {
-                    Snackbar.make(view, "Could not connect", Snackbar.LENGTH_SHORT).show();
-                }
-            }.start();
         } else {
-            Snackbar.make(view, "Check the input fields", Snackbar.LENGTH_SHORT).show();
+            Snackbar.make(rootView, R.string.something_missing, Snackbar.LENGTH_SHORT).show();
         }
     }
 
-    /**
-     * Fires an intent to spin up the "file chooser" UI and select an image.
-     */
-    public void performFileSearchPrivate(View view) {
-        // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file browser.
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        // Filter to only show results that can be "opened", such as a
-        // file (as opposed to a list of contacts or timezones)
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        // Filter to show only images, using the image MIME data type.
-        // If one wanted to search for ogg vorbis files, the type would be "audio/ogg".
-        // To search for all documents available via installed storage providers, it would be "*/*".
-        intent.setType("*/*");
-        startActivityForResult(intent, READ_REQUEST_CODE_PRIVATE_KEY);
+    public void chosePEMKeyAction(View view) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            startActivityForResult(intent, PEM_CHOOSER_REQUEST);
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST);
+        }
     }
-
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
-        // The ACTION_OPEN_DOCUMENT intent was sent with the request code
-        // READ_REQUEST_CODE. If the request code seen here doesn't match, it's the
-        // response to some other intent, and the code below shouldn't run at all.
         super.onActivityResult(requestCode, resultCode, resultData);
-        if (requestCode == READ_REQUEST_CODE_PRIVATE_KEY && resultCode == Activity.RESULT_OK) {
-            // The document selected by the user won't be returned in the intent.
-            // Instead, a URI to that document will be contained in the return intent
-            // provided to this method as a parameter.
-            // Pull that URI using resultData.getData().
-            //Uri uri = null;
-            if (resultData != null) {
-                Uri uri = resultData.getData();
-                try {
-                    byte[] filecontent_bytes = readBytes(getContentResolver().openInputStream(uri));
-                    if (new String(filecontent_bytes).split("\n")[0].equals("-----BEGIN RSA PRIVATE KEY-----") ||
-                            pemPasswordSwitch.isChecked()) {
-                        SpiderApp.private_bytes = filecontent_bytes;
-                    } else {
-                        SpiderApp.private_bytes = null;
-                        Toast.makeText(getApplicationContext(), "Selected is not in PEM format", Toast.LENGTH_SHORT).show();
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
+        if ((requestCode == PEM_CHOOSER_REQUEST) && (resultCode == Activity.RESULT_OK) && (resultData != null)) {
+            try {
+                ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
+                byte[] buffer = new byte[1024];
+                int len;
+                InputStream inputStream = getContentResolver().openInputStream(resultData.getData());
+                while ((len = inputStream.read(buffer)) != -1) {
+                    byteBuffer.write(buffer, 0, len);
                 }
+                byte[] bytes = byteBuffer.toByteArray();
+                if (pemPasswordSwitch.isChecked() || new String(bytes).split("\n")[0].equals("-----BEGIN RSA PRIVATE KEY-----")) {
+                    private_bytes = bytes;
+                } else {
+                    private_bytes = null;
+                    Toast.makeText(this, "The selected key is not in PEM format.", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
     }
 
-    public byte[] readBytes(InputStream inputStream) throws IOException {
-        // this dynamically extends to take the bytes you read
-        ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
-        // this is storage overwritten on each iteration with bytes
-        int bufferSize = 1024;
-        byte[] buffer = new byte[bufferSize];
-        // we need to know how may bytes were read to write them to the byteBuffer
-        int len;
-        while ((len = inputStream.read(buffer)) != -1) {
-            byteBuffer.write(buffer, 0, len);
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if ((requestCode == STORAGE_PERMISSION_REQUEST) && (grantResults[0] != PackageManager.PERMISSION_GRANTED))
+            Snackbar.make(rootView, R.string.storage_permission_required, Snackbar.LENGTH_SHORT).show();
+    }
+
+    public class ConnectTask extends Thread {
+
+        private final String TAG = SpiderApp.getTag(ConnectTask.class);
+        private final ProgressDialog progressDialog;
+        private final String user;
+        private final String ip;
+        private final String password;
+        private final int port;
+        private final boolean useKey;
+        private final boolean usePEM;
+        private final String pemPassword;
+        private final Handler handler = new Handler(Looper.getMainLooper());
+
+        public ConnectTask(String user, String ip, String password, int port,
+                           boolean useKey, boolean usePEM, String pemPassword) {
+            super();
+            this.user = user;
+            this.ip = ip;
+            this.password = password;
+            this.port = port;
+            this.useKey = useKey;
+            this.usePEM = usePEM;
+            this.pemPassword = pemPassword;
+            progressDialog = new ProgressDialog(ConnectionActivity.this);
+            progressDialog.setMessage(getString(R.string.connecting));
+            progressDialog.show();
         }
-        // and then we can return your byte array.
-        return byteBuffer.toByteArray();
+
+        @Override
+        public void run() {
+            try {
+                JSch jsch = new JSch();
+                Session session;
+                if (!useKey) {
+                    session = jsch.getSession(user, ip, port);
+                    session.setPassword(password);
+                } else {
+                    if (usePEM) {
+                        jsch.addIdentity("connection", private_bytes, null, pemPassword.getBytes());
+                    } else {
+                        jsch.addIdentity("connection", private_bytes, null, null);
+                    }
+                    session = jsch.getSession(user, ip, port);
+                    session.setConfig("PreferredAuthentications", "publickey");
+                }
+                session.setConfig("StrictHostKeyChecking", "no");
+                session.connect();
+                ChannelSftp channel = (ChannelSftp) session.openChannel("sftp");
+                channel.connect();
+                Log.d(TAG, "Connected, returning session");
+                SpiderApp.session = session;
+                SpiderApp.channel = channel;
+                handler.post(() -> {
+                    progressDialog.dismiss();
+                    Intent intent = new Intent(ConnectionActivity.this, FolderActivity.class);
+                    intent.putExtra(FolderActivity.EXTRA_REMOTE_FOLDER, remoteFolder);
+                    ConnectionActivity.this.startActivity(intent);
+                });
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage(), e);
+                handler.post(() -> {
+                    progressDialog.dismiss();
+                    Snackbar.make(rootView, R.string.connection_error, Snackbar.LENGTH_SHORT).show();
+                });
+            }
+        }
     }
 }

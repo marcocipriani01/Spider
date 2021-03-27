@@ -9,7 +9,7 @@ public class DirectoryElement implements Comparable<DirectoryElement> {
     public final String shortName;
     public final long size;
     public final ChannelSftp.LsEntry sftpInfo;
-    public final long sizeMB;
+    public final double sizeMB;
 
     public DirectoryElement(String name, boolean isDirectory, long size, ChannelSftp.LsEntry sftpInfo) {
         this.name = name;
@@ -17,7 +17,7 @@ public class DirectoryElement implements Comparable<DirectoryElement> {
         this.sftpInfo = sftpInfo;
         this.shortName = name.substring(name.lastIndexOf("/") + 1);
         this.size = size;
-        this.sizeMB = size / (1024 * 1024);
+        this.sizeMB = size / 2048.0;
     }
 
     @Override

@@ -2,7 +2,7 @@
     <string name="app_name">Spider SFTP</string>
     <string name="connect_to">Connect to</string>
     <string name="ip_address">IP address</string>
-    <string name="port_hint">Port (default 22)</string>
+    <string name="port_hint">Port</string>
     <string name="username">Username</string>
     <string name="use_pem_key_file">Use PEM key file</string>
     <string name="password">Password</string>
@@ -20,4 +20,10 @@
     <string name="downloading_message">Downloading \"%s\" (%.2f)</string>
     <string name="download_error">Download error: %s</string>
     <string name="file_downloaded_message">File downloaded in: "%s"</string>
+    <string name="something_missing">Something is missing…</string>
+    <string name="connection_error">Could not connect</string>
+    <string name="no_pem_loaded">No PEM file loaded!</string>
+    <string name="please_write_password">Please, input a password</string>
+    <string name="invalid_port">Invalid port!</string>
+    <string name="storage_permission_required">Storage permission is required to use this app.</string>
 </resources>

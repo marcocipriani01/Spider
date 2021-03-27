@@ -1,6 +1,5 @@
 package io.github.marcocipriani01.spider;
 
-import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,20 +22,14 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
     @NonNull
     @Override
     public FolderAdapter.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        Context context = parent.getContext();
-        LayoutInflater inflater = LayoutInflater.from(context);
-        // Inflate the custom layout
+        LayoutInflater inflater = LayoutInflater.from(parent.getContext());
         View contactView = inflater.inflate(R.layout.item_connection, parent, false);
-        // Return a new holder instance
         return new ViewHolder(contactView);
     }
 
-    // Involves populating data into the item through holder
     @Override
     public void onBindViewHolder(@NonNull FolderAdapter.ViewHolder viewHolder, int position) {
-        // Get the data model based on position
         DirectoryElement directoryElement = this.directoryElement.get(position);
-        // Set item views based on your views and data model
         if (directoryElement.isDirectory) {
             viewHolder.icon.setImageResource(R.drawable.folder);
         } else if (directoryElement.sftpInfo.getAttrs().isLink()) {
@@ -47,7 +40,6 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
         viewHolder.filename.setText(directoryElement.name);
     }
 
-    // Returns the total count of items in the list
     @Override
     public int getItemCount() {
         return directoryElement.size();
@@ -55,16 +47,10 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
 
-        // Your holder should contain a member variable
-        // for any view that will be set as you render a row
         public TextView filename;
         public ImageView icon;
 
-        // We also create a constructor that accepts the entire item row
-        // and does the view lookups to find each subview
         public ViewHolder(View itemView) {
-            // Stores the itemView in a public final member variable that can be used
-            // to access the context from any ViewHolder instance.
             super(itemView);
             filename = itemView.findViewById(R.id.filename);
             icon = itemView.findViewById(R.id.icon);

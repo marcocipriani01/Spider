@@ -14,7 +14,7 @@ Not yet available
 - File upload
 - File download
 
-### Credits
+## Credits
 
 - Developer: [@marcocipriani01](https://github.com/marcocipriani01)
 - App originally designed by [Nick Durante](https://github.com/nickdurante)
