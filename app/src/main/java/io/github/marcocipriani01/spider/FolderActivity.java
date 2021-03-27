@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
@@ -25,28 +26,26 @@ import com.google.android.material.snackbar.Snackbar;
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.Session;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Vector;
 
-import io.github.marcocipriani01.spider.tasks.DownloadTask;
-
 public class FolderActivity extends AppCompatActivity {
 
     private static final int READ_REQUEST_CODE_UPLOAD = 84;
-    private final String TAG = SpiderApp.getTag(FolderActivity.class);
     private final PathHandler pathHandler = new PathHandler();
     private final ArrayList<DirectoryElement> elements = new ArrayList<>();
-    private ProgressDialog progressDialog;
     private ActionBar actionBar;
     private FolderAdapter adapter;
     private CoordinatorLayout coordinator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.d(TAG, "started");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_folder);
         coordinator = findViewById(R.id.folder_activity_coordinator);
@@ -57,33 +56,21 @@ public class FolderActivity extends AppCompatActivity {
         }
 
         this.<FloatingActionButton>findViewById(R.id.upload_fab).setOnClickListener(view -> {
-            // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file browser.
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            // Filter to only show results that can be "opened", such as a
-            // file (as opposed to a list of contacts or timezones)
             intent.addCategory(Intent.CATEGORY_OPENABLE);
-            // Filter to show only images, using the image MIME data type.
-            // If one wanted to search for ogg vorbis files, the type would be "audio/ogg".
-            // To search for all documents available via installed storage providers, it would be "*/*".
             intent.setType("*/*");
             startActivityForResult(intent, READ_REQUEST_CODE_UPLOAD);
         });
 
-        RecyclerView recyclerView = findViewById(R.id.folder_list);
         SwipeRefreshLayout swipeRefreshLayout = findViewById(R.id.swipe_view);
-
-        Session session = SpiderApp.session;
-        Log.d(TAG, "got session: " + session.getHost());
-        // set the adapter
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            new GetFilesTask(pathHandler.getCurrentPath()).start();
+            swipeRefreshLayout.setRefreshing(false);
+        });
+        RecyclerView recyclerView = findViewById(R.id.folder_list);
         adapter = new FolderAdapter(elements);
-
-        //get file list in task
-        new GetFilesTask(pathHandler.getCurrentPath()).start();
-
-        // link all
         recyclerView.setAdapter(adapter);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-
         recyclerView.addOnItemTouchListener(
                 new RecyclerItemClickListener(this, recyclerView, new RecyclerItemClickListener.OnItemClickListener() {
                     @Override
@@ -98,24 +85,21 @@ public class FolderActivity extends AppCompatActivity {
                     @Override
                     public void onLongItemClick(View view, int position) {
                         DirectoryElement element = elements.get(position);
-                        if (!element.isDirectory && !element.sftpInfo.getAttrs().isLink()) {
-                            Snackbar.make(coordinator, "Download: " + element.name, Snackbar.LENGTH_LONG).show();
-                            progressDialog = new ProgressDialog(FolderActivity.this);
-                            progressDialog.setMessage("Downloading: " + element.shortName + " (" + element.sizeMB + "MB)");
-                            progressDialog.setIndeterminate(true);
-                            progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-                            progressDialog.setCancelable(false);
-                            SpiderApp.mProgressDialogDownload = progressDialog;
-                            new DownloadTask(FolderActivity.this, element).start();
-                        }
+                        if (!element.isDirectory && !element.sftpInfo.getAttrs().isLink())
+                            new DownloadTask(element).start();
                     }
                 })
         );
+        new GetFilesTask(pathHandler.getCurrentPath()).start();
+    }
 
-        swipeRefreshLayout.setOnRefreshListener(() -> {
-            new GetFilesTask(pathHandler.getCurrentPath()).start();
-            swipeRefreshLayout.setRefreshing(false);
-        });
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            finish();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -132,20 +116,11 @@ public class FolderActivity extends AppCompatActivity {
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == android.R.id.home) {
-            finish();
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
-    @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
         super.onActivityResult(requestCode, resultCode, resultData);
         if (requestCode == READ_REQUEST_CODE_UPLOAD && resultCode == Activity.RESULT_OK) {
             if (resultData != null)
-                new UploadTask(FolderActivity.this, resultData.getData(), SpiderApp.currentPath);
+                new UploadTask(resultData.getData(), SpiderApp.currentPath).start();
         }
     }
 
@@ -196,25 +171,24 @@ public class FolderActivity extends AppCompatActivity {
     public class UploadTask extends Thread {
 
         private final String TAG = SpiderApp.getTag(UploadTask.class);
-        private final Context context;
         private final Uri file;
         private final String path;
         private final ProgressDialog progressDialog;
         private final Handler handler = new Handler(Looper.getMainLooper());
         private PowerManager.WakeLock wakeLock;
 
-        public UploadTask(Context context, Uri file, String remotePath) {
-            this.context = context;
+        public UploadTask(Uri file, String remotePath) {
             this.file = file;
             this.path = remotePath;
             // Take CPU lock to prevent CPU from going off if the user presses the power button during download
-            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            PowerManager pm = (PowerManager) FolderActivity.this.getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, getClass().getName());
                 wakeLock.acquire(10 * 60);
             }
-            progressDialog = new ProgressDialog(context);
+            progressDialog = new ProgressDialog(FolderActivity.this);
             progressDialog.setMessage("Uploading: " + file.getLastPathSegment());
+            progressDialog.setMax(100);
             progressDialog.setIndeterminate(true);
             progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
             progressDialog.setCancelable(false);
@@ -228,7 +202,7 @@ public class FolderActivity extends AppCompatActivity {
                 int cut = name.lastIndexOf('/');
                 if (cut != -1) name = name.substring(cut + 1);
             }
-            try (InputStream bis = context.getContentResolver().openInputStream(file);
+            try (InputStream bis = getContentResolver().openInputStream(file);
                  BufferedOutputStream bos = new BufferedOutputStream(SpiderApp.channel.put(path + "/" + name))) {
                 byte[] buffer = new byte[1024];
                 Log.d(TAG, "Destination: " + path + "/" + name);
@@ -244,24 +218,93 @@ public class FolderActivity extends AppCompatActivity {
                     handler.post(() -> {
                         // If we get here, length is known, now set indeterminate to false
                         progressDialog.setIndeterminate(false);
-                        progressDialog.setMax(100);
                         progressDialog.setProgress(percentage);
                     });
                 }
+                handler.post(() -> {
+                    if (wakeLock != null) wakeLock.release();
+                    progressDialog.dismiss();
+                    Snackbar.make(coordinator, R.string.file_uploaded, Snackbar.LENGTH_LONG).show();
+                });
             } catch (Exception e) {
                 Log.e(TAG, e.getMessage(), e);
                 handler.post(() -> {
                     if (wakeLock != null) wakeLock.release();
                     progressDialog.dismiss();
-                    Snackbar.make(coordinator, String.format(context.getString(R.string.upload_error), e.getMessage()), Snackbar.LENGTH_SHORT).show();
+                    Snackbar.make(coordinator, String.format(getString(R.string.upload_error), e.getMessage()), Snackbar.LENGTH_SHORT).show();
                 });
-                return;
             }
-            handler.post(() -> {
-                if (wakeLock != null) wakeLock.release();
-                progressDialog.dismiss();
-                Snackbar.make(coordinator, R.string.file_uploaded, Snackbar.LENGTH_LONG).show();
-            });
+        }
+    }
+
+    public class DownloadTask extends Thread {
+
+        private final String TAG = SpiderApp.getTag(DownloadTask.class);
+        private final DirectoryElement element;
+        private final ProgressDialog progressDialog;
+        private final Handler handler = new Handler(Looper.getMainLooper());
+        private PowerManager.WakeLock wakeLock;
+
+        public DownloadTask(DirectoryElement element) {
+            super();
+            this.element = element;
+            // Take CPU lock to prevent CPU from going off if the user
+            // presses the power button during download
+            PowerManager pm = (PowerManager) FolderActivity.this.getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, getClass().getName());
+                wakeLock.acquire(10 * 60);
+            }
+            progressDialog = new ProgressDialog(FolderActivity.this);
+            progressDialog.setMessage(String.format(getString(R.string.downloading_message), element.shortName, element.sizeMB));
+            progressDialog.setMax(100);
+            progressDialog.setIndeterminate(true);
+            progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+            progressDialog.setCancelable(false);
+            progressDialog.show();
+        }
+
+        @SuppressWarnings("ResultOfMethodCallIgnored")
+        @Override
+        public void run() {
+            File dir = new File(Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER);
+            if (!dir.exists()) dir.mkdirs();
+            try (BufferedInputStream bis = new BufferedInputStream(SpiderApp.channel.get(element.name));
+                 BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(
+                         new File(Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER + "/" + element.shortName)))) {
+                byte[] buffer = new byte[1024];
+                int readCount;
+                long progress = 0;
+                long size = element.size;
+                while ((readCount = bis.read(buffer)) > 0) {
+                    bos.write(buffer, 0, readCount);
+                    progress += buffer.length;
+                    final int percentage = (int) (progress * 100 / size);
+                    Log.d(TAG, "size: " + size);
+                    Log.d(TAG, "progress: " + progress);
+                    Log.d(TAG, "Writing: " + percentage + "%");
+                    handler.post(() -> {
+                        // If we get here, length is known, now set indeterminate to false
+                        progressDialog.setIndeterminate(false);
+                        progressDialog.setProgress(percentage);
+                    });
+                }
+                handler.post(() -> {
+                    if (wakeLock != null) wakeLock.release();
+                    progressDialog.dismiss();
+                    Snackbar.make(coordinator, String.format(getString(R.string.file_downloaded_message),
+                            Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER),
+                            Snackbar.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage(), e);
+                handler.post(() -> {
+                    if (wakeLock != null) wakeLock.release();
+                    progressDialog.dismiss();
+                    Snackbar.make(coordinator, String.format(getString(R.string.download_error), e.getMessage()),
+                            Snackbar.LENGTH_SHORT).show();
+                });
+            }
         }
     }
 }

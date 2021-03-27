@@ -15,13 +15,14 @@ import java.io.File;
 import java.io.FileOutputStream;
 
 import io.github.marcocipriani01.spider.DirectoryElement;
+import io.github.marcocipriani01.spider.R;
 import io.github.marcocipriani01.spider.SpiderApp;
 
 public class DownloadTask extends Thread {
 
     private final Context context;
     private final DirectoryElement element;
-    private final ProgressDialog progressDialog = SpiderApp.mProgressDialogDownload;
+    private final ProgressDialog progressDialog;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private PowerManager.WakeLock wakeLock;
 
@@ -36,6 +37,12 @@ public class DownloadTask extends Thread {
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, getClass().getName());
             wakeLock.acquire(10 * 60);
         }
+        progressDialog = new ProgressDialog(context);
+        progressDialog.setMessage(String.format(context.getString(R.string.downloading_message), element.shortName, element.sizeMB));
+        progressDialog.setMax(100);
+        progressDialog.setIndeterminate(true);
+        progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        progressDialog.setCancelable(false);
         progressDialog.show();
     }
 
@@ -61,10 +68,14 @@ public class DownloadTask extends Thread {
                 handler.post(() -> {
                     // If we get here, length is known, now set indeterminate to false
                     progressDialog.setIndeterminate(false);
-                    progressDialog.setMax(100);
                     progressDialog.setProgress(percentage);
                 });
             }
+            handler.post(() -> {
+                if (wakeLock != null) wakeLock.release();
+                progressDialog.dismiss();
+                Toast.makeText(context, "File downloaded in: " + Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER, Toast.LENGTH_LONG).show();
+            });
         } catch (Exception e) {
             Log.e("DOWNLOAD", e.getMessage(), e);
             handler.post(() -> {
@@ -72,12 +83,6 @@ public class DownloadTask extends Thread {
                 progressDialog.dismiss();
                 Toast.makeText(context, "Download error: " + e.getMessage(), Toast.LENGTH_LONG).show();
             });
-            return;
         }
-        handler.post(() -> {
-            if (wakeLock != null) wakeLock.release();
-            progressDialog.dismiss();
-            Toast.makeText(context, "File downloaded in: " + Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER, Toast.LENGTH_LONG).show();
-        });
     }
 }

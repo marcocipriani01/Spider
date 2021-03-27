@@ -1,7 +1,6 @@
 package io.github.marcocipriani01.spider;
 
 import android.app.Application;
-import android.app.ProgressDialog;
 
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.Session;
@@ -13,7 +12,6 @@ public class SpiderApp extends Application {
     public static Session session;
     public static ChannelSftp channel;
     public static String currentPath;
-    public static ProgressDialog mProgressDialogDownload;
     public static byte[] private_bytes;
 
     /**

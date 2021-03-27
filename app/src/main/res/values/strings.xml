@@ -17,4 +17,7 @@
     <string name="connecting">Connecting…</string>
     <string name="file_uploaded">File uploaded.</string>
     <string name="upload_error">Upload error: %s</string>
+    <string name="downloading_message">Downloading \"%s\" (%.2f)</string>
+    <string name="download_error">Download error: %s</string>
+    <string name="file_downloaded_message">File downloaded in: "%s"</string>
 </resources>
