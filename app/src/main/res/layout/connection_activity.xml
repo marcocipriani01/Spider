@@ -1,87 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:paddingHorizontal="@dimen/activity_horizontal_margin"
+    android:paddingVertical="@dimen/activity_vertical_margin">
 
     <TextView
-        android:id="@+id/textView4"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Connect to"
-        android:textAlignment="center"
-        android:textColor="?attr/editTextColor"
-        android:textSize="24sp" />
+        android:text="@string/connect_to"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
+        android:textColor="?attr/editTextColor" />
 
     <EditText
         android:id="@+id/register_ip"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ems="10"
-        android:hint="IP address"
+        android:layout_marginTop="4dp"
+        android:hint="@string/ip_address"
+        android:importantForAutofill="no"
         android:inputType="text" />
 
     <EditText
         android:id="@+id/register_port"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ems="10"
-        android:hint="Port"
+        android:layout_marginTop="4dp"
+        android:hint="@string/port_hint"
+        android:importantForAutofill="no"
         android:inputType="numberDecimal" />
 
     <EditText
         android:id="@+id/register_user"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ems="10"
-        android:hint="User"
+        android:layout_marginTop="4dp"
+        android:hint="@string/username"
+        android:importantForAutofill="no"
         android:inputType="textPersonName" />
 
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/register_switch_id"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Use id file"
+        android:layout_marginTop="4dp"
+        android:text="@string/use_pem_key_file"
         android:textAlignment="viewStart"
-        android:textSize="20sp" />
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+        app:switchMinWidth="60dp" />
 
     <EditText
         android:id="@+id/register_password"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ems="10"
-        android:hint="password"
+        android:layout_marginTop="4dp"
+        android:hint="@string/password"
+        android:importantForAutofill="no"
         android:inputType="textPassword" />
 
     <Button
         android:id="@+id/register_button_choose_file"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:onClick="performFileSearchPrivate"
-        android:text="Choose PEM private key..." />
+        android:text="@string/choose_pem_private_key"
+        android:visibility="gone" />
 
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/register_switch_pem_password"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Password protected"
-        android:textAlignment="viewStart"
-        android:textSize="20sp" />
-
+        android:layout_marginTop="4dp"
+        android:text="@string/password_protected_key"
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+        android:visibility="gone"
+        app:switchMinWidth="60dp" />
 
     <EditText
         android:id="@+id/register_pem_password"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ems="10"
-        android:hint="PEM password"
-        android:inputType="textPassword" />
+        android:layout_marginTop="4dp"
+        android:hint="@string/pem_password"
+        android:importantForAutofill="no"
+        android:inputType="textPassword"
+        android:visibility="gone" />
 
     <Button
         android:id="@+id/register_button_save"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
+        android:drawableStart="@drawable/connect"
         android:onClick="saveConnection"
-        android:text="Connect" />
+        android:text="@string/connect"
+        android:textStyle="bold" />
 </LinearLayout>

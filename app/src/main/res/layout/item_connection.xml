@@ -13,6 +13,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="10dp"
         android:layout_weight="1"
+        android:contentDescription="@string/icon"
         app:srcCompat="@drawable/folder" />
 
     <TextView
@@ -20,6 +21,5 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="10dp"
-        android:layout_weight="1"
-        android:text="filename" />
+        android:layout_weight="1" />
 </LinearLayout>

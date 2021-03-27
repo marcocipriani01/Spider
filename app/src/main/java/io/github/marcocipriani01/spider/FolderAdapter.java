@@ -14,10 +14,10 @@ import java.util.List;
 
 public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder> {
 
-    private final List<DirectoryElement> mDirectoryElement;
+    private final List<DirectoryElement> directoryElement;
 
     public FolderAdapter(List<DirectoryElement> dir) {
-        mDirectoryElement = dir;
+        directoryElement = dir;
     }
 
     @NonNull
@@ -35,12 +35,12 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
     @Override
     public void onBindViewHolder(@NonNull FolderAdapter.ViewHolder viewHolder, int position) {
         // Get the data model based on position
-        DirectoryElement directoryElement = mDirectoryElement.get(position);
+        DirectoryElement directoryElement = this.directoryElement.get(position);
         // Set item views based on your views and data model
         if (directoryElement.isDirectory) {
             viewHolder.icon.setImageResource(R.drawable.folder);
         } else if (directoryElement.sftpInfo.getAttrs().isLink()) {
-            viewHolder.icon.setImageResource(R.drawable.right);
+            viewHolder.icon.setImageResource(R.drawable.link);
         } else {
             viewHolder.icon.setImageResource(R.drawable.file);
         }
@@ -50,10 +50,11 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
     // Returns the total count of items in the list
     @Override
     public int getItemCount() {
-        return mDirectoryElement.size();
+        return directoryElement.size();
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
+
         // Your holder should contain a member variable
         // for any view that will be set as you render a row
         public TextView filename;
@@ -65,10 +66,8 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
             // Stores the itemView in a public final member variable that can be used
             // to access the context from any ViewHolder instance.
             super(itemView);
-
             filename = itemView.findViewById(R.id.filename);
             icon = itemView.findViewById(R.id.icon);
-
         }
     }
 }

@@ -1,13 +1,20 @@
 <resources>
-    <string name="app_name">Spider</string>
-    <string name="action_settings">Settings</string>
-    <string name="title_activity_login">Sign in</string>
-    <string name="prompt_email">Email</string>
-    <string name="prompt_password">Password</string>
-    <string name="action_sign_in">Sign in or register</string>
-    <string name="action_sign_in_short">Sign in</string>
-    <string name="welcome">"Welcome !"</string>
-    <string name="invalid_username">Not a valid username</string>
-    <string name="invalid_password">Password must be >5 characters</string>
-    <string name="login_failed">"Login failed"</string>
+    <string name="app_name">Spider SFTP</string>
+    <string name="connect_to">Connect to</string>
+    <string name="ip_address">IP address</string>
+    <string name="port_hint">Port (default 22)</string>
+    <string name="username">Username</string>
+    <string name="use_pem_key_file">Use PEM key file</string>
+    <string name="password">Password</string>
+    <string name="choose_pem_private_key">Choose PEM private key…</string>
+    <string name="password_protected_key">Password-protected key</string>
+    <string name="pem_password">PEM password</string>
+    <string name="connect">Connect</string>
+    <string name="icon">Icon</string>
+    <string name="upload">Upload</string>
+    <string name="logout">Logout</string>
+    <string name="sftp_folder">SFTP folder</string>
+    <string name="connecting">Connecting…</string>
+    <string name="file_uploaded">File uploaded.</string>
+    <string name="upload_error">Upload error: %s</string>
 </resources>
