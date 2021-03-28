@@ -2,6 +2,7 @@ package io.github.marcocipriani01.spider;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -10,10 +11,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.annotation.NonNull;
@@ -22,6 +26,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -29,6 +34,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.SftpException;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -36,6 +42,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Vector;
@@ -46,10 +53,13 @@ public class FolderActivity extends AppCompatActivity {
     private static final int STORAGE_PERMISSION_REQUEST = 20;
     private static final int READ_REQUEST_CODE_UPLOAD = 30;
     private final ArrayList<DirectoryElement> elements = new ArrayList<>();
+    private final HandlerThread sftpThread = new HandlerThread("SFTP thread");
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private ActionBar actionBar;
     private FolderAdapter adapter;
     private CoordinatorLayout coordinator;
     private String currentPath;
+    private Handler sftpHandler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,39 +82,18 @@ public class FolderActivity extends AppCompatActivity {
 
         SwipeRefreshLayout swipeRefreshLayout = findViewById(R.id.swipe_view);
         swipeRefreshLayout.setOnRefreshListener(() -> {
-            new GetFilesTask(currentPath).start();
+            sftpHandler.post(new GetFilesTask());
             swipeRefreshLayout.setRefreshing(false);
         });
         RecyclerView recyclerView = findViewById(R.id.folder_list);
         adapter = new FolderAdapter(elements);
         recyclerView.setAdapter(adapter);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.addOnItemTouchListener(
-                new RecyclerItemClickListener(this, recyclerView, new RecyclerItemClickListener.OnItemClickListener() {
-                    @Override
-                    public void onItemClick(View view, int position) {
-                        DirectoryElement element = elements.get(position);
-                        if (element.isDirectory || element.sftpInfo.getAttrs().isLink()) {
-                            updatePath(element.name);
-                            new GetFilesTask(currentPath).start();
-                        }
-                    }
+        recyclerView.addOnItemTouchListener(new FolderItemListener(this, recyclerView));
 
-                    @Override
-                    public void onLongItemClick(View view, int position) {
-                        if (ContextCompat.checkSelfPermission(FolderActivity.this,
-                                Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-                            DirectoryElement element = elements.get(position);
-                            if (!element.isDirectory && !element.sftpInfo.getAttrs().isLink())
-                                new DownloadTask(element).start();
-                        } else {
-                            ActivityCompat.requestPermissions(FolderActivity.this,
-                                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST);
-                        }
-                    }
-                })
-        );
-        new GetFilesTask(currentPath).start();
+        sftpThread.start();
+        sftpHandler = new Handler(sftpThread.getLooper());
+        sftpHandler.post(new GetFilesTask());
     }
 
     @Override
@@ -118,22 +107,24 @@ public class FolderActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        updatePath("..");
-        new GetFilesTask(currentPath).start();
+        sftpHandler.post(new GetFilesTask(".."));
     }
 
     @Override
     public void finish() {
         super.finish();
+        sftpThread.quit();
         SpiderApp.channel.disconnect();
+        SpiderApp.channel = null;
         SpiderApp.session.disconnect();
+        SpiderApp.session = null;
     }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
         super.onActivityResult(requestCode, resultCode, resultData);
         if ((requestCode == READ_REQUEST_CODE_UPLOAD) && (resultCode == Activity.RESULT_OK) && (resultData != null))
-            new UploadTask(resultData.getData(), currentPath).start();
+            sftpHandler.post(new UploadTask(resultData.getData(), currentPath));
     }
 
     @Override
@@ -143,87 +134,77 @@ public class FolderActivity extends AppCompatActivity {
             Snackbar.make(coordinator, R.string.storage_permission_required, Snackbar.LENGTH_SHORT).show();
     }
 
-    public void updatePath(String dir) {
-        // Clean current path from last / but not root
-        if (currentPath.endsWith("/") && currentPath.length() != 1)
-            currentPath = currentPath.substring(0, currentPath.length() - 2);
-        // Clean dir from first /
-        if (dir.endsWith("/")) {
-            dir = dir.substring(0, dir.length() - 2);
-        }
-        // Clean dir from first /
-        if (dir.substring(0, 0).equals("/")) {
-            dir = dir.substring(1);
-        }
-        // Check if going up
-        if (dir.equals("..")) {
-            // Check if going on root
-            if (currentPath.lastIndexOf("/") == 0) {
-                currentPath = "/";
-            } else {
-                currentPath = currentPath.substring(0, currentPath.lastIndexOf("/"));
-            }
-        } else {
-            if (currentPath.length() != 1) {
-                currentPath = currentPath + "/" + dir;
-            } else {
-                currentPath = currentPath + dir;
-            }
-        }
-    }
-
-    private class GetFilesTask extends Thread {
+    private class GetFilesTask implements Runnable {
 
         private final String TAG = SpiderApp.getTag(GetFilesTask.class);
-        private final Handler handler = new Handler(Looper.getMainLooper());
-        private final String path;
+        private final String targetPath;
 
-        public GetFilesTask(String path) {
-            super();
-            this.path = path;
+        GetFilesTask() {
+            this.targetPath = null;
+        }
+
+        GetFilesTask(String dir) {
+            if (dir.equals("..")) { // Check if going up
+                if (currentPath.equals("/")) {
+                    this.targetPath = null;
+                } else if (currentPath.endsWith("/")) {
+                    String tmp = currentPath.substring(0, currentPath.lastIndexOf("/"));
+                    this.targetPath = tmp.substring(0, tmp.lastIndexOf("/") + 1);
+                } else {
+                    this.targetPath = currentPath.substring(0, currentPath.lastIndexOf("/") + 1);
+                }
+            } else {
+                if (dir.endsWith("/")) dir = dir.substring(0, dir.length() - 2);
+                if (currentPath.equals("/") || currentPath.endsWith("/")) {
+                    this.targetPath = currentPath + dir;
+                } else {
+                    this.targetPath = currentPath + "/" + dir;
+                }
+            }
+            Log.d(TAG, "Going to " + dir + " (" + this.targetPath + ")");
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public void run() {
             try {
-                Log.d(TAG, "session is: " + SpiderApp.session.getHost());
-                SpiderApp.channel.cd(path);
-                final Vector<ChannelSftp.LsEntry> list = SpiderApp.channel.ls("*");
-                Log.d(TAG, "Files are:");
-                for (ChannelSftp.LsEntry entry : list) {
-                    Log.d(TAG, entry.getFilename());
+                Vector<ChannelSftp.LsEntry> list;
+                if (targetPath == null) {
+                    list = SpiderApp.channel.ls("*");
+                } else {
+                    SpiderApp.channel.cd(targetPath);
+                    list = SpiderApp.channel.ls("*");
+                    currentPath = targetPath;
                 }
                 handler.post(() -> {
                     elements.clear();
-                    elements.add(new DirectoryElement("..", true, 0, null));
-                    if (list != null) {
-                        for (ChannelSftp.LsEntry entry : list) {
-                            Log.d(TAG, "Adding to elements:" + entry.getFilename());
-                            elements.add(new DirectoryElement(entry.getFilename(), entry.getAttrs().isDir(),
-                                    entry.getAttrs().getSize(), entry));
-                        }
-                        Collections.sort(elements);
+                    if (!currentPath.equals("/"))
+                        elements.add(new DirectoryElement("..", true, 0, null));
+                    for (ChannelSftp.LsEntry entry : list) {
+                        elements.add(new DirectoryElement(entry.getFilename(), entry.getAttrs().isDir(),
+                                entry.getAttrs().getSize(), entry));
                     }
+                    Collections.sort(elements);
                     adapter.notifyDataSetChanged();
                     actionBar.setTitle(currentPath);
                 });
             } catch (Exception e) {
                 Log.e(TAG, e.getMessage(), e);
+                handler.post(() -> Snackbar.make(coordinator,
+                        String.format(getString(R.string.read_error), e.getMessage()), Snackbar.LENGTH_SHORT).show());
             }
         }
     }
 
-    public class UploadTask extends Thread {
+    private class UploadTask implements Runnable {
 
         private final String TAG = SpiderApp.getTag(UploadTask.class);
         private final Uri file;
         private final String path;
         private final ProgressDialog progressDialog;
-        private final Handler handler = new Handler(Looper.getMainLooper());
         private PowerManager.WakeLock wakeLock;
 
-        public UploadTask(Uri file, String remotePath) {
+        UploadTask(Uri file, String remotePath) {
             this.file = file;
             this.path = remotePath;
             // Take CPU lock to prevent CPU from going off if the user presses the power button during download
@@ -247,6 +228,8 @@ public class FolderActivity extends AppCompatActivity {
             if (name != null) {
                 int cut = name.lastIndexOf('/');
                 if (cut != -1) name = name.substring(cut + 1);
+                name = name.replace(":", "_").replace("?", "_").replace("<", "_")
+                        .replace(">", "_").replace("|", "_");
             }
             try (InputStream bis = getContentResolver().openInputStream(file);
                  BufferedOutputStream bos = new BufferedOutputStream(SpiderApp.channel.put(path + "/" + name))) {
@@ -268,6 +251,7 @@ public class FolderActivity extends AppCompatActivity {
                     });
                 }
                 handler.post(() -> {
+                    sftpHandler.post(new GetFilesTask());
                     if (wakeLock != null) wakeLock.release();
                     progressDialog.dismiss();
                     Snackbar.make(coordinator, R.string.file_uploaded, Snackbar.LENGTH_LONG).show();
@@ -283,19 +267,16 @@ public class FolderActivity extends AppCompatActivity {
         }
     }
 
-    public class DownloadTask extends Thread {
+    private class DownloadTask implements Runnable {
 
         private final String TAG = SpiderApp.getTag(DownloadTask.class);
         private final DirectoryElement element;
         private final ProgressDialog progressDialog;
-        private final Handler handler = new Handler(Looper.getMainLooper());
         private PowerManager.WakeLock wakeLock;
 
-        public DownloadTask(DirectoryElement element) {
-            super();
+        DownloadTask(DirectoryElement element) {
             this.element = element;
-            // Take CPU lock to prevent CPU from going off if the user
-            // presses the power button during download
+            // Take CPU lock to prevent CPU from going off if the user presses the power button during download
             PowerManager pm = (PowerManager) FolderActivity.this.getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, getClass().getName());
@@ -304,7 +285,7 @@ public class FolderActivity extends AppCompatActivity {
             progressDialog = new ProgressDialog(FolderActivity.this);
             progressDialog.setMessage(String.format(getString(R.string.downloading_message), element.shortName, element.sizeMB));
             progressDialog.setMax(100);
-            progressDialog.setIndeterminate(true);
+            progressDialog.setIndeterminate(false);
             progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
             progressDialog.setCancelable(false);
             progressDialog.show();
@@ -315,9 +296,10 @@ public class FolderActivity extends AppCompatActivity {
         public void run() {
             File dir = new File(Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER);
             if (!dir.exists()) dir.mkdirs();
+            File file = new File(Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER + "/" + element.shortName);
             try (BufferedInputStream bis = new BufferedInputStream(SpiderApp.channel.get(element.name));
                  BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(
-                         new File(Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER + "/" + element.shortName)))) {
+                         file))) {
                 byte[] buffer = new byte[1024];
                 int readCount;
                 long progress = 0;
@@ -326,21 +308,21 @@ public class FolderActivity extends AppCompatActivity {
                     bos.write(buffer, 0, readCount);
                     progress += buffer.length;
                     final int percentage = (int) (progress * 100 / size);
-                    Log.d(TAG, "size: " + size);
-                    Log.d(TAG, "progress: " + progress);
-                    Log.d(TAG, "Writing: " + percentage + "%");
-                    handler.post(() -> {
-                        // If we get here, length is known, now set indeterminate to false
-                        progressDialog.setIndeterminate(false);
-                        progressDialog.setProgress(percentage);
-                    });
+                    handler.post(() -> progressDialog.setProgress(percentage));
                 }
                 handler.post(() -> {
                     if (wakeLock != null) wakeLock.release();
                     progressDialog.dismiss();
                     Snackbar.make(coordinator, String.format(getString(R.string.file_downloaded_message),
                             Environment.getExternalStorageDirectory() + "/" + SpiderApp.DOWNLOAD_FOLDER),
-                            Snackbar.LENGTH_SHORT).show();
+                            Snackbar.LENGTH_SHORT).setAction("Open", v -> {
+                        Intent intent = new Intent();
+                        intent.setDataAndType(FileProvider.getUriForFile(FolderActivity.this,
+                                BuildConfig.APPLICATION_ID + ".provider", file), "*/*");
+                        intent.setAction(Intent.ACTION_VIEW);
+                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivity(Intent.createChooser(intent, "Open file"));
+                    }).show();
                 });
             } catch (Exception e) {
                 Log.e(TAG, e.getMessage(), e);
@@ -351,6 +333,130 @@ public class FolderActivity extends AppCompatActivity {
                             Snackbar.LENGTH_SHORT).show();
                 });
             }
+        }
+    }
+
+    private class DeleteTask implements Runnable {
+
+        private final String TAG = SpiderApp.getTag(DeleteTask.class);
+        private final DirectoryElement element;
+
+        DeleteTask(DirectoryElement element) {
+            this.element = element;
+        }
+
+        @Override
+        public void run() {
+            try {
+                String path = currentPath + (currentPath.endsWith("/") ? "" : "/") + element.name;
+                if (element.isDirectory) {
+                    recursiveFolderDelete(path);
+                } else {
+                    SpiderApp.channel.rm(path);
+                }
+                sftpHandler.post(new GetFilesTask());
+                handler.post(() -> Snackbar.make(coordinator,
+                        getString(R.string.deleted_ok), Snackbar.LENGTH_SHORT).show());
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage(), e);
+                handler.post(() -> Snackbar.make(coordinator,
+                        String.format(getString(R.string.delete_error), e.getMessage()),
+                        Snackbar.LENGTH_SHORT).show());
+            }
+        }
+
+        /**
+         * @see <a href="https://stackoverflow.com/a/41490348/6267019">Source</a>
+         */
+        @SuppressWarnings("unchecked")
+        private void recursiveFolderDelete(String path) throws SftpException {
+            // List source directory structure.
+            Collection<ChannelSftp.LsEntry> list = SpiderApp.channel.ls(path);
+            // Iterate objects in the list to get file/folder names.
+            for (ChannelSftp.LsEntry item : list) {
+                String filename = item.getFilename();
+                if (item.getAttrs().isDir()) {
+                    if (!(".".equals(filename) || "..".equals(filename))) { // If it is a sub-directory
+                        try {
+                            SpiderApp.channel.rmdir(path + "/" + filename);
+                        } catch (Exception e) {
+                            // If sub-directory is not empty and error occurs,
+                            // repeat on this directory to clear its contents.
+                            recursiveFolderDelete(path + "/" + filename);
+                        }
+                    }
+                } else {
+                    SpiderApp.channel.rm(path + "/" + filename); // Remove file.
+                }
+            }
+            SpiderApp.channel.rmdir(path); // delete the parent directory after empty
+        }
+    }
+
+    private class FolderItemListener implements RecyclerView.OnItemTouchListener {
+
+        private final GestureDetector gestureDetector;
+
+        FolderItemListener(Context context, RecyclerView recyclerView) {
+            gestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public boolean onSingleTapUp(MotionEvent e) {
+                    return true;
+                }
+
+                @Override
+                public void onLongPress(MotionEvent e) {
+                    View child = recyclerView.findChildViewUnder(e.getX(), e.getY());
+                    if (child != null) {
+                        if (ContextCompat.checkSelfPermission(FolderActivity.this,
+                                Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                            DirectoryElement element = elements.get(recyclerView.getChildAdapterPosition(child));
+                            if (element.isDirectory) {
+                                new AlertDialog.Builder(FolderActivity.this).setTitle(R.string.app_name)
+                                        .setMessage(String.format(getString(R.string.delete_folder_question), element.name))
+                                        .setIcon(R.drawable.delete)
+                                        .setPositiveButton(android.R.string.ok, (dialog, which) ->
+                                                sftpHandler.post(new DeleteTask(element)))
+                                        .setNegativeButton(android.R.string.cancel, null).show();
+                            } else if (element.isLink()) {
+                                Snackbar.make(coordinator, R.string.links_unsupported, Snackbar.LENGTH_SHORT).show();
+                            } else {
+                                new AlertDialog.Builder(FolderActivity.this).setTitle(R.string.app_name)
+                                        .setMessage(String.format(getString(R.string.select_action), element.name))
+                                        .setIcon(R.drawable.file)
+                                        .setPositiveButton(R.string.download, (dialog, which) ->
+                                                sftpHandler.post(new DownloadTask(element)))
+                                        .setNeutralButton(R.string.delete, (dialog, which) ->
+                                                sftpHandler.post(new DeleteTask(element)))
+                                        .setNegativeButton(android.R.string.cancel, null).show();
+                            }
+                        } else {
+                            ActivityCompat.requestPermissions(FolderActivity.this,
+                                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST);
+                        }
+                    }
+                }
+            });
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(RecyclerView view, MotionEvent e) {
+            View childView = view.findChildViewUnder(e.getX(), e.getY());
+            if ((childView != null) && gestureDetector.onTouchEvent(e)) {
+                DirectoryElement element = elements.get(view.getChildAdapterPosition(childView));
+                if (element.isDirectory || element.isLink())
+                    sftpHandler.post(new GetFilesTask(element.name));
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public void onTouchEvent(@NonNull RecyclerView view, @NonNull MotionEvent motionEvent) {
+        }
+
+        @Override
+        public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {
         }
     }
 }

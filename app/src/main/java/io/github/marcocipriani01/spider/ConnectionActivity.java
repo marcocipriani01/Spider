@@ -13,7 +13,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.Toast;
+import android.widget.CheckBox;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -34,9 +34,11 @@ public class ConnectionActivity extends AppCompatActivity {
 
     private static final int PEM_CHOOSER_REQUEST = 10;
     private static final int STORAGE_PERMISSION_REQUEST = 20;
-    public static byte[] private_bytes;
+    public static byte[] privateKeyBytes;
+    private final String TAG = SpiderApp.getTag(ConnectionActivity.class);
     private SwitchCompat usePEMKeySwitch, pemPasswordSwitch;
     private TextInputEditText passwordField, pemPasswordField, usernameField, ipField, portField;
+    private CheckBox savePasswordBox;
     private SharedPreferences preferences;
     private Button privateKeyButton;
     private View rootView;
@@ -47,6 +49,7 @@ public class ConnectionActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.connection_activity);
         rootView = findViewById(R.id.connection_root_view);
+        savePasswordBox = findViewById(R.id.sftp_save_password_box);
         usePEMKeySwitch = findViewById(R.id.sftp_pem_switch);
         passwordField = findViewById(R.id.sftp_password_field);
         usernameField = this.findViewById(R.id.sftp_username_field);
@@ -76,16 +79,24 @@ public class ConnectionActivity extends AppCompatActivity {
         preferences = getPreferences(Context.MODE_PRIVATE);
         ipField.setText(preferences.getString(SpiderApp.IP_PREF, ""));
         usernameField.setText(preferences.getString(SpiderApp.USERNAME_PREF, ""));
-        passwordField.setText(preferences.getString(SpiderApp.PASSWORD_PREF, ""));
         portField.setText(preferences.getString(SpiderApp.PORT_PREF, "22"));
-        pemPasswordField.setText(preferences.getString(SpiderApp.PEM_PASSWORD_PREF, ""));
         usePEMKeySwitch.setChecked(preferences.getBoolean(SpiderApp.USE_PEM_PREF, false));
         pemPasswordSwitch.setChecked(preferences.getBoolean(SpiderApp.USE_PEM_PASSWORD_PREF, false));
+        boolean savePasswords = preferences.getBoolean(SpiderApp.SAVE_PASSWORDS_PREF, true);
+        savePasswordBox.setChecked(savePasswords);
+        savePasswordBox.setSelected(savePasswords);
+        if (savePasswords) {
+            passwordField.setText(preferences.getString(SpiderApp.PASSWORD_PREF, ""));
+            pemPasswordField.setText(preferences.getString(SpiderApp.PEM_PASSWORD_PREF, ""));
+        }
+        if (privateKeyBytes != null)
+            privateKeyButton.setText(R.string.private_key_selected);
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST);
     }
 
+    @SuppressWarnings("ConstantConditions")
     public void connectAction(View view) {
         String user = usernameField.getText().toString(),
                 ip = ipField.getText().toString();
@@ -96,20 +107,22 @@ public class ConnectionActivity extends AppCompatActivity {
                     pemPassword = pemPasswordField.getText().toString();
             boolean usePEM = usePEMKeySwitch.isChecked(),
                     usePEMPassword = pemPasswordSwitch.isChecked();
-            if (usePEM && (private_bytes == null)) {
+            if (usePEM && (privateKeyBytes == null)) {
                 Snackbar.make(rootView, R.string.no_pem_loaded, Snackbar.LENGTH_SHORT).show();
             } else if (password.isEmpty()) {
                 Snackbar.make(rootView, R.string.please_write_password, Snackbar.LENGTH_SHORT).show();
             } else {
                 try {
                     int port = portString.isEmpty() ? 22 : Integer.parseInt(portString);
-                    preferences.edit().putString(SpiderApp.USERNAME_PREF, user)
+                    boolean savePasswords = savePasswordBox.isChecked();
+                    preferences.edit().putBoolean(SpiderApp.SAVE_PASSWORDS_PREF, savePasswords)
+                            .putString(SpiderApp.USERNAME_PREF, user)
                             .putString(SpiderApp.IP_PREF, ip)
                             .putString(SpiderApp.PORT_PREF, portString)
-                            .putString(SpiderApp.PASSWORD_PREF, password)
-                            .putString(SpiderApp.PEM_PASSWORD_PREF, pemPassword)
                             .putBoolean(SpiderApp.USE_PEM_PREF, usePEM)
-                            .putBoolean(SpiderApp.USE_PEM_PASSWORD_PREF, usePEMPassword).apply();
+                            .putBoolean(SpiderApp.USE_PEM_PASSWORD_PREF, usePEMPassword)
+                            .putString(SpiderApp.PASSWORD_PREF, savePasswords ? password : "")
+                            .putString(SpiderApp.PEM_PASSWORD_PREF, savePasswords ? pemPassword : "").apply();
                     if ((port <= 0) || (port >= 0xFFFF)) {
                         Snackbar.make(rootView, R.string.invalid_port, Snackbar.LENGTH_SHORT).show();
                     } else {
@@ -149,14 +162,16 @@ public class ConnectionActivity extends AppCompatActivity {
                     byteBuffer.write(buffer, 0, len);
                 }
                 byte[] bytes = byteBuffer.toByteArray();
-                if (pemPasswordSwitch.isChecked() || new String(bytes).split("\n")[0].equals("-----BEGIN RSA PRIVATE KEY-----")) {
-                    private_bytes = bytes;
+                if (pemPasswordSwitch.isChecked() || new String(bytes).contains("PRIVATE KEY")) {
+                    privateKeyBytes = bytes;
+                    privateKeyButton.setText(R.string.private_key_selected);
                 } else {
-                    private_bytes = null;
-                    Toast.makeText(this, "The selected key is not in PEM format.", Toast.LENGTH_SHORT).show();
+                    privateKeyBytes = null;
+                    Snackbar.make(rootView, R.string.pem_key_error, Snackbar.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e(TAG, e.getMessage(), e);
+                Snackbar.make(rootView, R.string.could_not_read_key, Snackbar.LENGTH_SHORT).show();
             }
         }
     }
@@ -206,17 +221,17 @@ public class ConnectionActivity extends AppCompatActivity {
                     session.setPassword(password);
                 } else {
                     if (usePEM) {
-                        jsch.addIdentity("connection", private_bytes, null, pemPassword.getBytes());
+                        jsch.addIdentity("connection", privateKeyBytes, null, pemPassword.getBytes());
                     } else {
-                        jsch.addIdentity("connection", private_bytes, null, null);
+                        jsch.addIdentity("connection", privateKeyBytes, null, null);
                     }
                     session = jsch.getSession(user, ip, port);
                     session.setConfig("PreferredAuthentications", "publickey");
                 }
                 session.setConfig("StrictHostKeyChecking", "no");
-                session.connect();
+                session.connect(15000);
                 ChannelSftp channel = (ChannelSftp) session.openChannel("sftp");
-                channel.connect();
+                channel.connect(15000);
                 Log.d(TAG, "Connected, returning session");
                 SpiderApp.session = session;
                 SpiderApp.channel = channel;

@@ -32,7 +32,7 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.ViewHolder
         DirectoryElement directoryElement = this.directoryElement.get(position);
         if (directoryElement.isDirectory) {
             viewHolder.icon.setImageResource(R.drawable.folder);
-        } else if (directoryElement.sftpInfo.getAttrs().isLink()) {
+        } else if (directoryElement.isLink()) {
             viewHolder.icon.setImageResource(R.drawable.link);
         } else {
             viewHolder.icon.setImageResource(R.drawable.file);

@@ -1,11 +1,9 @@
 package io.github.marcocipriani01.spider;
 
-import android.app.Application;
-
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.Session;
 
-public class SpiderApp extends Application {
+public class SpiderApp {
 
     public static final String APP_NAME = "Spider";
     public static final String DOWNLOAD_FOLDER = "SpiderSFTP";
@@ -16,6 +14,7 @@ public class SpiderApp extends Application {
     public static final String USE_PEM_PREF = "sftp_use_pem_key";
     public static final String USE_PEM_PASSWORD_PREF = "sftp_use_pem_password";
     public static final String PEM_PASSWORD_PREF = "sftp_pem_password";
+    public static final String SAVE_PASSWORDS_PREF = "sftp_save_passwords";
     public static Session session;
     public static ChannelSftp channel;
 

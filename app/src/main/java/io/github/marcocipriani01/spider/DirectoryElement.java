@@ -20,6 +20,10 @@ public class DirectoryElement implements Comparable<DirectoryElement> {
         this.sizeMB = size / 2048.0;
     }
 
+    public boolean isLink() {
+        return sftpInfo.getAttrs().isLink();
+    }
+
     @Override
     public int compareTo(DirectoryElement o) {
         return name.compareTo(o.name);
