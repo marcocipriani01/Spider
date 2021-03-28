@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Spider SFTP</string>
+    <string name="app_name" translatable="false">Spider SFTP</string>
     <string name="connect_to">Connect to</string>
     <string name="ip_address">IP address</string>
     <string name="port_hint">Port</string>
@@ -37,4 +37,7 @@
     <string name="pem_key_error">The selected key is not in PEM format.</string>
     <string name="could_not_read_key">Could not read the key!</string>
     <string name="private_key_selected">Private key selected</string>
+    <string name="github">GitHub</string>
+    <string name="open_source_libraries">Open-source libraries</string>
+    <string name="uploading">Uploading \"%s\"…</string>
 </resources>

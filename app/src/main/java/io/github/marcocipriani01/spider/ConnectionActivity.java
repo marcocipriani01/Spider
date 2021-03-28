@@ -7,10 +7,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -21,6 +24,7 @@ import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.oss.licenses.OssLicensesMenuActivity;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.TextInputEditText;
 import com.jcraft.jsch.ChannelSftp;
@@ -65,16 +69,26 @@ public class ConnectionActivity extends AppCompatActivity {
                 passwordFieldLayout.setVisibility(View.GONE);
                 privateKeyButton.setVisibility(View.VISIBLE);
                 pemPasswordSwitch.setVisibility(View.VISIBLE);
-                pemPasswordLayout.setVisibility(pemPasswordSwitch.isChecked() ? View.VISIBLE : View.GONE);
+                int pemPassword = pemPasswordSwitch.isChecked() ? View.VISIBLE : View.GONE;
+                pemPasswordLayout.setVisibility(pemPassword);
+                savePasswordBox.setVisibility(pemPassword);
             } else {
                 passwordFieldLayout.setVisibility(View.VISIBLE);
                 privateKeyButton.setVisibility(View.GONE);
                 pemPasswordSwitch.setVisibility(View.GONE);
                 pemPasswordLayout.setVisibility(View.GONE);
+                savePasswordBox.setVisibility(View.VISIBLE);
             }
         });
-        pemPasswordSwitch.setOnCheckedChangeListener((buttonView, isChecked) ->
-                pemPasswordLayout.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+        pemPasswordSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                pemPasswordLayout.setVisibility(View.VISIBLE);
+                savePasswordBox.setVisibility(View.VISIBLE);
+            } else {
+                pemPasswordLayout.setVisibility(View.GONE);
+                savePasswordBox.setVisibility(View.GONE);
+            }
+        });
 
         preferences = getPreferences(Context.MODE_PRIVATE);
         ipField.setText(preferences.getString(SpiderApp.IP_PREF, ""));
@@ -96,6 +110,25 @@ public class ConnectionActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST);
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        super.onCreateOptionsMenu(menu);
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.menu_github) {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/marcocipriani01/Spider")));
+        } else if (item.getItemId() == R.id.menu_oss) {
+            startActivity(new Intent(this, OssLicensesMenuActivity.class));
+        } else {
+            return super.onOptionsItemSelected(item);
+        }
+        return true;
+    }
+
     @SuppressWarnings("ConstantConditions")
     public void connectAction(View view) {
         String user = usernameField.getText().toString(),
@@ -106,10 +139,10 @@ public class ConnectionActivity extends AppCompatActivity {
                     password = passwordField.getText().toString(),
                     pemPassword = pemPasswordField.getText().toString();
             boolean usePEM = usePEMKeySwitch.isChecked(),
-                    usePEMPassword = pemPasswordSwitch.isChecked();
+                    usePEMPassword = usePEM && pemPasswordSwitch.isChecked();
             if (usePEM && (privateKeyBytes == null)) {
                 Snackbar.make(rootView, R.string.no_pem_loaded, Snackbar.LENGTH_SHORT).show();
-            } else if (password.isEmpty()) {
+            } else if ((!usePEM && password.isEmpty()) || (usePEMPassword && pemPassword.isEmpty())) {
                 Snackbar.make(rootView, R.string.please_write_password, Snackbar.LENGTH_SHORT).show();
             } else {
                 try {

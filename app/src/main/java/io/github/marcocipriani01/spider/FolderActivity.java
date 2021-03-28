@@ -7,6 +7,7 @@ import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -14,6 +15,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MenuItem;
@@ -214,7 +216,7 @@ public class FolderActivity extends AppCompatActivity {
                 wakeLock.acquire(10 * 60);
             }
             progressDialog = new ProgressDialog(FolderActivity.this);
-            progressDialog.setMessage("Uploading: " + file.getLastPathSegment());
+            progressDialog.setMessage(String.format(getString(R.string.uploading), file.getLastPathSegment()));
             progressDialog.setMax(100);
             progressDialog.setIndeterminate(true);
             progressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
@@ -224,12 +226,19 @@ public class FolderActivity extends AppCompatActivity {
 
         @Override
         public void run() {
-            String name = file.getLastPathSegment();
-            if (name != null) {
+            String name = null;
+            if (file.getScheme().equals("content")) {
+                try (Cursor cursor = getContentResolver().query(file, null, null, null, null)) {
+                    if ((cursor != null) && cursor.moveToFirst())
+                        name = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+                } catch (Exception e) {
+                    Log.e(TAG, e.getMessage(), e);
+                }
+            }
+            if (name == null) {
+                name = file.getPath();
                 int cut = name.lastIndexOf('/');
                 if (cut != -1) name = name.substring(cut + 1);
-                name = name.replace(":", "_").replace("?", "_").replace("<", "_")
-                        .replace(">", "_").replace("|", "_");
             }
             try (InputStream bis = getContentResolver().openInputStream(file);
                  BufferedOutputStream bos = new BufferedOutputStream(SpiderApp.channel.put(path + "/" + name))) {
@@ -265,6 +274,7 @@ public class FolderActivity extends AppCompatActivity {
                 });
             }
         }
+
     }
 
     private class DownloadTask implements Runnable {

@@ -127,7 +127,8 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:hint="@string/pem_password"
-        android:visibility="gone">
+        android:visibility="gone"
+        app:endIconMode="password_toggle">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/sftp_pem_password_field"

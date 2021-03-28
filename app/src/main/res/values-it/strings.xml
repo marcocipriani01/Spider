@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connect_to">Connettiti a</string>
+    <string name="ip_address">Indirizzo IP</string>
+    <string name="port_hint">Porta</string>
+    <string name="username">Nome utente</string>
+    <string name="use_pem_key_file">Usa file-chiave PEM</string>
+    <string name="password">Password</string>
+    <string name="choose_pem_private_key">Sceglia la chiave privata…</string>
+    <string name="password_protected_key">Chiave con password</string>
+    <string name="pem_password">Password chiave PEM</string>
+    <string name="connect">Connetti</string>
+    <string name="icon">Icona</string>
+    <string name="upload">Carica</string>
+    <string name="sftp_folder">Cartella SFTP</string>
+    <string name="connecting">Connessione…</string>
+    <string name="file_uploaded">File caricato.</string>
+    <string name="upload_error">Errore di caricamento: %s</string>
+    <string name="read_error">Errore di lettura: %s</string>
+    <string name="delete_error">Errore nella cancellazione: %s</string>
+    <string name="deleted_ok">Eliminato con successo.</string>
+    <string name="downloading_message">Scaricando \"%s\" (%.2f)</string>
+    <string name="download_error">Errore nel download: %s</string>
+    <string name="file_downloaded_message">File scaricato in: \"%s\"</string>
+    <string name="something_missing">Manca qualcosa…</string>
+    <string name="connection_error">Impossibile connettersi</string>
+    <string name="no_pem_loaded">Nessa chiave caricata!</string>
+    <string name="please_write_password">Inserisci una password</string>
+    <string name="invalid_port">Porta non valida!</string>
+    <string name="storage_permission_required">Il permesso di lettura/scrittura è richiesto per usare l\'app.</string>
+    <string name="delete_folder_question">Vuoi cancellare \"%s\" e tutto il suo contenuto?</string>
+    <string name="links_unsupported">Impossibile gestire i link!</string>
+    <string name="select_action">Seleziona un\'azione per \"%s\":</string>
+    <string name="download">Scarica</string>
+    <string name="delete">Cancella</string>
+    <string name="save_passwords">Salva password</string>
+    <string name="pem_key_error">La chiave selezionata ha un formato sbagliato.</string>
+    <string name="could_not_read_key">Impossibile leggere la chiave!</string>
+    <string name="private_key_selected">Chiave PEM selezionata</string>
+    <string name="github">GitHub</string>
+    <string name="open_source_libraries">Librerie open-source</string>
+    <string name="uploading">Caricamento di \"%s\"…</string>
+</resources>
